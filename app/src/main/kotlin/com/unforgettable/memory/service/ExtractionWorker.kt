@@ -2,10 +2,8 @@ package com.unforgettable.memory.service
 
 import android.content.Context
 import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -154,21 +152,16 @@ class ExtractionWorker(
     companion object {
         const val KEY_RAW_NOTIFICATION_ID = "raw_notification_id"
         private const val CONFIDENCE_THRESHOLD = 0.8
+        private const val EXTRACTION_QUEUE_NAME = "notification_extraction"
 
         fun enqueue(context: Context, rawNotificationId: Long) {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-
             val work = OneTimeWorkRequestBuilder<ExtractionWorker>()
                 .setInputData(workDataOf(KEY_RAW_NOTIFICATION_ID to rawNotificationId))
-                .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .build()
 
             WorkManager.getInstance(context.applicationContext)
-                .enqueueUniqueWork("extract_$rawNotificationId", ExistingWorkPolicy.KEEP, work)
+                .enqueueUniqueWork(EXTRACTION_QUEUE_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, work)
         }
     }
 }
-
