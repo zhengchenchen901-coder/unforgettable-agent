@@ -20,13 +20,12 @@ The app uses:
 - Kotlin + Jetpack Compose + Material 3
 - Room for local storage
 - WorkManager for AI extraction and reminders
-- Retrofit + OkHttp for OpenAI Responses API
+- Retrofit + OkHttp for OpenAI-compatible Chat Completions APIs
 
 ## Demo Path
 
 1. Grant notification listener access from Home.
 2. Grant notification permission on Android 13+.
-3. Add an OpenAI API key in Settings.
+3. Choose an LLM provider/model in Settings and add that provider's API key.
 4. Open Debug and tap `注入模拟通知`.
 5. Confirm the raw notification, extraction log, task card, and reminder schedule.
-

@@ -96,7 +96,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             enabled = state.aiServiceReady,
             action = {
                 Text(
-                    text = if (state.aiServiceReady) "OpenAI Key 已保存" else "到 Settings 保存 OpenAI Key",
+                    text = state.aiServiceLabel,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

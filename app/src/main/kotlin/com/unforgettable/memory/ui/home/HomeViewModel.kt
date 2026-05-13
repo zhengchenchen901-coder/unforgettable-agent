@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 data class HomeUiState(
     val notificationAccess: Boolean = false,
     val aiServiceReady: Boolean = false,
+    val aiServiceLabel: String = "未配置",
     val reminderPermission: Boolean = false,
     val discoveredTaskCount: Int = 0,
     val completedTaskCount: Int = 0,
@@ -22,6 +23,7 @@ data class HomeUiState(
 private data class PermissionState(
     val notificationAccess: Boolean = false,
     val aiServiceReady: Boolean = false,
+    val aiServiceLabel: String = "未配置",
     val reminderPermission: Boolean = false,
 )
 
@@ -38,6 +40,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         HomeUiState(
             notificationAccess = permissionState.notificationAccess,
             aiServiceReady = permissionState.aiServiceReady,
+            aiServiceLabel = permissionState.aiServiceLabel,
             reminderPermission = permissionState.reminderPermission,
             discoveredTaskCount = discovered,
             completedTaskCount = completed,
@@ -46,11 +49,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     fun refresh() {
+        val provider = app.container.llmConfigStore.getSelectedProvider()
+        val model = app.container.llmConfigStore.getSelectedModel(provider)
+        val hasApiKey = app.container.llmConfigStore.hasApiKey(provider.id)
         permissions.value = PermissionState(
             notificationAccess = PermissionUtils.isNotificationListenerEnabled(app),
-            aiServiceReady = app.container.apiKeyStore.hasApiKey(),
+            aiServiceReady = hasApiKey,
+            aiServiceLabel = if (hasApiKey) {
+                "${provider.displayName} / ${model.displayName}"
+            } else {
+                "到 Settings 配置大模型和 API Key"
+            },
             reminderPermission = PermissionUtils.hasPostNotificationsPermission(app),
         )
     }
 }
-

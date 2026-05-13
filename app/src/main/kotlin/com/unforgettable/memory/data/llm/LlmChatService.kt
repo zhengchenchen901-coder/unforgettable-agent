@@ -4,24 +4,25 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.http.Body
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.Url
 import java.util.concurrent.TimeUnit
 
-interface OpenAIService {
-    @POST("responses")
-    suspend fun createResponse(
+interface LlmChatService {
+    @POST
+    suspend fun createChatCompletion(
+        @Url url: String,
         @Header("Authorization") authorization: String,
-        @Body request: OpenAIResponseRequest,
-    ): OpenAIResponse
+        @Body request: ChatCompletionRequest,
+    ): ChatCompletionResponse
 
     companion object {
-        fun create(): OpenAIService {
+        fun create(): LlmChatService {
             val json = Json {
                 ignoreUnknownKeys = true
                 explicitNulls = false
@@ -33,64 +34,50 @@ interface OpenAIService {
                 .build()
 
             return Retrofit.Builder()
-                .baseUrl("https://api.openai.com/v1/")
+                .baseUrl("https://api.openai.com/")
                 .client(client)
                 .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
                 .build()
-                .create(OpenAIService::class.java)
+                .create(LlmChatService::class.java)
         }
     }
 }
 
 @Serializable
-data class OpenAIResponseRequest(
+data class ChatCompletionRequest(
     val model: String,
-    val input: List<OpenAIInputMessage>,
-    val text: OpenAITextConfig,
+    val messages: List<ChatMessage>,
     val temperature: Double = 0.1,
+    val stream: Boolean = false,
+    @SerialName("max_tokens")
+    val maxTokens: Int = 800,
+    @SerialName("response_format")
+    val responseFormat: ChatResponseFormat? = ChatResponseFormat(),
 )
 
 @Serializable
-data class OpenAIInputMessage(
+data class ChatMessage(
     val role: String,
-    val content: List<OpenAIInputContent>,
+    val content: String,
 )
 
 @Serializable
-data class OpenAIInputContent(
-    val type: String = "input_text",
-    val text: String,
+data class ChatResponseFormat(
+    val type: String = "json_object",
 )
 
 @Serializable
-data class OpenAITextConfig(
-    val format: OpenAIResponseFormat,
+data class ChatCompletionResponse(
+    val choices: List<ChatChoice> = emptyList(),
 )
 
 @Serializable
-data class OpenAIResponseFormat(
-    val type: String = "json_schema",
-    val name: String,
-    val strict: Boolean = true,
-    val schema: JsonObject,
-    val description: String? = null,
+data class ChatChoice(
+    val message: ChatChoiceMessage? = null,
 )
 
 @Serializable
-data class OpenAIResponse(
-    val output: List<OpenAIOutputItem> = emptyList(),
+data class ChatChoiceMessage(
+    val role: String? = null,
+    val content: String? = null,
 )
-
-@Serializable
-data class OpenAIOutputItem(
-    val content: List<OpenAIOutputContent> = emptyList(),
-)
-
-@Serializable
-data class OpenAIOutputContent(
-    val type: String? = null,
-    val text: String? = null,
-    @SerialName("refusal")
-    val refusal: String? = null,
-)
-

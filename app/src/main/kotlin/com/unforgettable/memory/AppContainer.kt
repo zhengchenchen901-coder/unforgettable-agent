@@ -1,9 +1,9 @@
 package com.unforgettable.memory
 
 import android.content.Context
-import com.unforgettable.memory.data.llm.ApiKeyStore
-import com.unforgettable.memory.data.llm.OpenAIService
-import com.unforgettable.memory.data.llm.OpenAiTaskExtractor
+import com.unforgettable.memory.data.llm.LlmChatService
+import com.unforgettable.memory.data.llm.LlmConfigStore
+import com.unforgettable.memory.data.llm.LlmTaskExtractor
 import com.unforgettable.memory.data.repository.TaskRepository
 import com.unforgettable.memory.data.storage.AppDatabase
 import com.unforgettable.memory.domain.llm.HeuristicTaskExtractor
@@ -14,7 +14,7 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val database: AppDatabase = AppDatabase.get(appContext)
-    val apiKeyStore: ApiKeyStore = ApiKeyStore(appContext)
+    val llmConfigStore: LlmConfigStore = LlmConfigStore(appContext)
     val reminderScheduler = WorkManagerReminderScheduler(appContext)
 
     val taskRepository = TaskRepository(
@@ -23,10 +23,9 @@ class AppContainer(context: Context) {
         reminderScheduler = reminderScheduler,
     )
 
-    val taskExtractor: TaskExtractor = OpenAiTaskExtractor(
-        apiKeyStore = apiKeyStore,
-        service = OpenAIService.create(),
+    val taskExtractor: TaskExtractor = LlmTaskExtractor(
+        configStore = llmConfigStore,
+        service = LlmChatService.create(),
         fallback = HeuristicTaskExtractor(),
     )
 }
-
