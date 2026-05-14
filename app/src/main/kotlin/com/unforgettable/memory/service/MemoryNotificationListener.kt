@@ -8,6 +8,7 @@ import com.unforgettable.memory.data.storage.entity.RawNotificationEntity
 import com.unforgettable.memory.domain.notification.NotificationRules
 import com.unforgettable.memory.domain.notification.SupportedApps
 import com.unforgettable.memory.notification.NotificationParser
+import com.unforgettable.memory.reminder.NotificationChannels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,6 +51,11 @@ class MemoryNotificationListener : NotificationListenerService() {
     }
 
     private fun persistNotification(sbn: StatusBarNotification, source: String) {
+        if (sbn.packageName == packageName && sbn.notification.channelId == NotificationChannels.DEBUG_SEED_CHANNEL_ID) {
+            Log.d(TAG, "Skipped visible debug seed notification via $source")
+            return
+        }
+
         val event = parser.parse(sbn)
         if (event == null) {
             Log.d(TAG, "Skipped blank notification from ${sbn.packageName} via $source")

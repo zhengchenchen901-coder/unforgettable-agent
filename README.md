@@ -27,5 +27,15 @@ The app uses:
 1. Grant notification listener access from Home.
 2. Grant notification permission on Android 13+.
 3. Choose an LLM provider/model in Settings and add that provider's API key.
-4. Open Debug and tap `注入模拟通知`.
+4. Open Debug and use `入库 1`, `入库 25`, or `入库 100` to seed realistic raw notifications.
 5. Confirm the raw notification, extraction log, task card, and reminder schedule.
+
+For device notification tray stress testing in a debug build, use `通知栏 25` or trigger it from adb:
+
+```bash
+adb shell am broadcast \
+  -a com.unforgettable.memory.DEBUG_SEED_NOTIFICATIONS \
+  --ei count 100 \
+  --ez raw true \
+  --ez visible true
+```

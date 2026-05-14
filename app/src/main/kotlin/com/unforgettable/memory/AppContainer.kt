@@ -4,6 +4,7 @@ import android.content.Context
 import com.unforgettable.memory.data.llm.LlmChatService
 import com.unforgettable.memory.data.llm.LlmConfigStore
 import com.unforgettable.memory.data.llm.LlmTaskExtractor
+import com.unforgettable.memory.data.repository.MemoryRepository
 import com.unforgettable.memory.data.repository.TaskRepository
 import com.unforgettable.memory.data.storage.AppDatabase
 import com.unforgettable.memory.domain.llm.HeuristicTaskExtractor
@@ -16,6 +17,12 @@ class AppContainer(context: Context) {
     val database: AppDatabase = AppDatabase.get(appContext)
     val llmConfigStore: LlmConfigStore = LlmConfigStore(appContext)
     val reminderScheduler = WorkManagerReminderScheduler(appContext)
+
+    val memoryRepository = MemoryRepository(
+        memoryItemDao = database.memoryItemDao(),
+        memoryEvidenceDao = database.memoryEvidenceDao(),
+        memoryAccessLogDao = database.memoryAccessLogDao(),
+    )
 
     val taskRepository = TaskRepository(
         taskDao = database.taskDao(),

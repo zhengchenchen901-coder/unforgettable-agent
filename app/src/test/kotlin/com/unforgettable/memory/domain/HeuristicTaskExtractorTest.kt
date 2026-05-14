@@ -19,12 +19,14 @@ class HeuristicTaskExtractorTest {
                 timestamp = System.currentTimeMillis(),
             ),
             activeTasks = emptyList(),
+            memoryContext = emptyList(),
         )
 
         assertTrue(result.isTask)
         assertTrue(result.confidence > 0.8)
         assertEquals("medium", result.urgency)
         assertTrue(result.task!!.contains("PPT"))
+        assertTrue(result.memoryCandidates.isNotEmpty())
     }
 
     @Test
@@ -37,10 +39,10 @@ class HeuristicTaskExtractorTest {
                 timestamp = System.currentTimeMillis(),
             ),
             activeTasks = emptyList(),
+            memoryContext = emptyList(),
         )
 
         assertEquals(false, result.isTask)
         assertNull(result.task)
     }
 }
-

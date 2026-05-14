@@ -1,6 +1,9 @@
 package com.unforgettable.memory.domain.llm
 
 import com.unforgettable.memory.data.storage.entity.TaskEntity
+import com.unforgettable.memory.domain.memory.MemoryCandidate
+import com.unforgettable.memory.domain.memory.MemoryContextItem
+import com.unforgettable.memory.domain.memory.MemoryKeywordExtractor
 import com.unforgettable.memory.domain.notification.NotificationEvent
 import com.unforgettable.memory.domain.notification.NotificationRules
 import com.unforgettable.memory.domain.notification.SupportedApps
@@ -13,6 +16,7 @@ class HeuristicTaskExtractor : TaskExtractor {
     override suspend fun extract(
         event: NotificationEvent,
         activeTasks: List<TaskEntity>,
+        memoryContext: List<MemoryContextItem>,
     ): TaskExtractionResult {
         val text = event.combinedText
         if (NotificationRules.shouldIgnore(event.title, event.content)) {
@@ -52,15 +56,17 @@ class HeuristicTaskExtractor : TaskExtractor {
 
         val urgency = NotificationRules.urgencyFor(text)
         val deadlineText = extractDeadlineText(text)
+        val normalizedTask = normalizeTask(event)
         return TaskExtractionResult(
             isTask = confidence >= 0.65,
-            task = normalizeTask(event),
+            task = normalizedTask,
             deadlineLocal = inferDeadlineLocal(text, event.timestamp),
             deadlineText = deadlineText,
             urgency = urgency,
             confidence = confidence,
             duplicateOfTaskId = null,
             reason = "local heuristic extraction",
+            memoryCandidates = buildMemoryCandidates(event, normalizedTask, memoryContext),
         )
     }
 
@@ -112,5 +118,43 @@ class HeuristicTaskExtractor : TaskExtractor {
             reason = reason,
         )
     }
-}
 
+    private fun buildMemoryCandidates(
+        event: NotificationEvent,
+        task: String,
+        memoryContext: List<MemoryContextItem>,
+    ): List<MemoryCandidate> {
+        val sender = event.title.trim().takeIf { it.isNotBlank() && it.length <= 80 }
+        val keywords = (
+            listOfNotNull(sender) +
+                MemoryKeywordExtractor.fromText("${event.title} ${event.content} $task")
+            )
+            .distinct()
+            .take(8)
+
+        val candidates = mutableListOf<MemoryCandidate>()
+        if (sender != null && memoryContext.none { it.title == sender && it.type == "person" }) {
+            candidates += MemoryCandidate(
+                type = "person",
+                title = sender,
+                content = "Actionable tasks from $sender often arrive through ${SupportedApps.appLabel(event.packageName)}.",
+                keywords = keywords,
+                confidence = 0.74,
+                importance = 0.55,
+                reason = "sender appeared on an actionable notification",
+            )
+        }
+        if (task.contains("PPT", ignoreCase = true)) {
+            candidates += MemoryCandidate(
+                type = "pattern",
+                title = "PPT follow-up request",
+                content = "Notifications mentioning PPT can represent deliverable follow-up tasks.",
+                keywords = (keywords + "ppt").distinct().take(8),
+                confidence = 0.72,
+                importance = 0.5,
+                reason = "task content included a recurring deliverable keyword",
+            )
+        }
+        return candidates
+    }
+}

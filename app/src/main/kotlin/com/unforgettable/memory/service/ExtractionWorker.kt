@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.unforgettable.memory.UnforgettableApp
+import com.unforgettable.memory.data.llm.LlmTaskExtractor
 import com.unforgettable.memory.data.storage.entity.AiExtractionLogEntity
 import com.unforgettable.memory.data.storage.entity.RawNotificationEntity
 import com.unforgettable.memory.data.storage.entity.TaskEntity
@@ -81,7 +82,9 @@ class ExtractionWorker(
         }
 
         val activeTasks = database.taskDao().getActiveTasksSnapshot()
-        val extraction = container.taskExtractor.extract(event, activeTasks)
+        val memoryContext = container.memoryRepository.retrieveFor(event)
+        container.memoryRepository.recordAccess(raw.id, requestText, memoryContext)
+        val extraction = container.taskExtractor.extract(event, activeTasks, memoryContext)
         val responseJson = extraction.rawJson ?: json.encodeToString(extraction)
         val decision = decideAndMaybeCreateTask(raw, extraction)
 
@@ -92,6 +95,7 @@ class ExtractionWorker(
         raw: RawNotificationEntity,
         extraction: TaskExtractionResult,
     ): String {
+        if (extraction.error == LlmTaskExtractor.ERROR_MISSING_API_KEY) return "skipped_missing_api_key"
         if (!extraction.isTask) return "rejected_not_task"
         extraction.duplicateOfTaskId?.let { return "duplicate_by_llm:$it" }
         if (extraction.confidence <= CONFIDENCE_THRESHOLD) return "rejected_below_threshold:${extraction.confidence}"
@@ -121,7 +125,13 @@ class ExtractionWorker(
                 fingerprint = fingerprint,
             ),
         )
-        return "created_task:$taskId"
+        val createdTask = container.database.taskDao().getById(taskId)
+        val memoryCount = if (createdTask != null) {
+            container.memoryRepository.upsertFromCandidates(raw, createdTask, extraction.memoryCandidates)
+        } else {
+            0
+        }
+        return "created_task:$taskId;memories:$memoryCount"
     }
 
     private fun log(

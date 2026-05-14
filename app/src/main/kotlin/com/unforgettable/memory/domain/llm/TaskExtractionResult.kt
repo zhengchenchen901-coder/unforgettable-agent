@@ -1,5 +1,6 @@
 package com.unforgettable.memory.domain.llm
 
+import com.unforgettable.memory.domain.memory.MemoryCandidate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -17,7 +18,8 @@ data class TaskExtractionResult(
     @SerialName("duplicate_of_task_id")
     val duplicateOfTaskId: Long?,
     val reason: String,
+    @SerialName("memory_candidates")
+    val memoryCandidates: List<MemoryCandidate> = emptyList(),
     val rawJson: String? = null,
     val error: String? = null,
 )
-

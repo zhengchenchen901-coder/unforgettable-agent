@@ -11,7 +11,11 @@ data class LlmRuntimeConfig(
     val apiKey: String,
 )
 
-class LlmConfigStore(context: Context) {
+interface LlmRuntimeConfigProvider {
+    fun getRuntimeConfig(): LlmRuntimeConfig?
+}
+
+class LlmConfigStore(context: Context) : LlmRuntimeConfigProvider {
     private val appContext = context.applicationContext
 
     private val preferences: SharedPreferences by lazy {
@@ -88,7 +92,7 @@ class LlmConfigStore(context: Context) {
         return getApiKey(providerId) != null
     }
 
-    fun getRuntimeConfig(): LlmRuntimeConfig? {
+    override fun getRuntimeConfig(): LlmRuntimeConfig? {
         val provider = getSelectedProvider()
         val apiKey = getApiKey(provider.id) ?: return null
         return LlmRuntimeConfig(
