@@ -13,6 +13,5 @@ class UnforgettableApp : Application() {
         container = AppContainer(this)
         NotificationChannels.create(this)
         NotificationListenerHealth.schedule(this)
-        NotificationListenerHealth.enqueueRebindCheck(this)
     }
 }

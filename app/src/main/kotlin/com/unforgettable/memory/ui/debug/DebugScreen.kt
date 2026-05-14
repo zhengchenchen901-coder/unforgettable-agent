@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAlert
 import androidx.compose.material.icons.filled.Archive
@@ -51,6 +52,7 @@ import com.unforgettable.memory.domain.memory.MemoryStatus
 import com.unforgettable.memory.domain.notification.SupportedApps
 import com.unforgettable.memory.service.NotificationListenerHealthSnapshot
 import com.unforgettable.memory.ui.formatDateTime
+import com.unforgettable.memory.util.PermissionUtils
 
 private enum class DebugTab(val label: String) {
     Raw("Raw"),
@@ -183,6 +185,10 @@ fun DebugScreen(modifier: Modifier = Modifier) {
                         ListenerHealthCard(
                             health = listenerHealth,
                             onRefresh = viewModel::refreshListenerHealth,
+                            onForceRebind = viewModel::requestListenerRebind,
+                            onOpenListenerSettings = {
+                                PermissionUtils.openNotificationListenerSettings(context)
+                            },
                         )
                     }
                 }
@@ -283,6 +289,8 @@ private fun EmptyDebugCard(text: String) {
 private fun ListenerHealthCard(
     health: NotificationListenerHealthSnapshot,
     onRefresh: () -> Unit,
+    onForceRebind: () -> Unit,
+    onOpenListenerSettings: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -317,7 +325,34 @@ private fun ListenerHealthCard(
                     Text("Refresh", modifier = Modifier.padding(start = 8.dp))
                 }
             }
+            OutlinedButton(onClick = onForceRebind) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Text("Request rebind", modifier = Modifier.padding(start = 8.dp))
+            }
+            OutlinedButton(onClick = onOpenListenerSettings) {
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
+                Text("Notification access", modifier = Modifier.padding(start = 8.dp))
+            }
             HealthRow("Last event", health.lastEvent.orEmpty(), health.lastEventAt)
+            HealthRow(
+                "Last posted",
+                listOfNotNull(
+                    health.lastNotificationPostedPackage,
+                    health.lastNotificationPostedSummary,
+                ).joinToString(" / "),
+                health.lastNotificationPostedAt,
+            )
+            HealthRow(
+                "Last skipped",
+                listOfNotNull(
+                    health.lastNotificationSkippedReason,
+                    health.lastNotificationSkippedSummary,
+                ).joinToString(" / "),
+                health.lastNotificationSkippedAt,
+            )
+            HealthRow("Last raw stored", health.lastRawStoredSummary, health.lastRawStoredAt)
+            HealthRow("Last duplicate", health.lastDuplicateSkippedSummary, health.lastDuplicateSkippedAt)
+            HealthRow("Last persist failed", health.lastPersistFailedReason, health.lastPersistFailedAt)
             HealthRow("Created", null, health.lastCreatedAt)
             HealthRow("Connected", null, health.lastConnectedAt)
             HealthRow("Disconnected", null, health.lastDisconnectedAt)

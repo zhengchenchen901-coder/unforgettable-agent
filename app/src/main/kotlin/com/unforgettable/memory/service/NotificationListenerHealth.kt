@@ -10,6 +10,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.unforgettable.memory.util.PermissionUtils
 import java.util.concurrent.TimeUnit
 
@@ -25,6 +26,18 @@ data class NotificationListenerHealthSnapshot(
     val lastRebindRequestedAt: Long?,
     val lastRebindSkippedAt: Long?,
     val lastRebindFailedAt: Long?,
+    val lastNotificationPostedAt: Long?,
+    val lastNotificationPostedPackage: String?,
+    val lastNotificationPostedSummary: String?,
+    val lastNotificationSkippedAt: Long?,
+    val lastNotificationSkippedReason: String?,
+    val lastNotificationSkippedSummary: String?,
+    val lastRawStoredAt: Long?,
+    val lastRawStoredSummary: String?,
+    val lastDuplicateSkippedAt: Long?,
+    val lastDuplicateSkippedSummary: String?,
+    val lastPersistFailedAt: Long?,
+    val lastPersistFailedReason: String?,
 )
 
 object NotificationListenerHealth {
@@ -40,8 +53,21 @@ object NotificationListenerHealth {
     private const val KEY_REBIND_REQUESTED_AT = "rebind_requested_at"
     private const val KEY_REBIND_SKIPPED_AT = "rebind_skipped_at"
     private const val KEY_REBIND_FAILED_AT = "rebind_failed_at"
+    private const val KEY_NOTIFICATION_POSTED_AT = "notification_posted_at"
+    private const val KEY_NOTIFICATION_POSTED_PACKAGE = "notification_posted_package"
+    private const val KEY_NOTIFICATION_POSTED_SUMMARY = "notification_posted_summary"
+    private const val KEY_NOTIFICATION_SKIPPED_AT = "notification_skipped_at"
+    private const val KEY_NOTIFICATION_SKIPPED_REASON = "notification_skipped_reason"
+    private const val KEY_NOTIFICATION_SKIPPED_SUMMARY = "notification_skipped_summary"
+    private const val KEY_RAW_STORED_AT = "raw_stored_at"
+    private const val KEY_RAW_STORED_SUMMARY = "raw_stored_summary"
+    private const val KEY_DUPLICATE_SKIPPED_AT = "duplicate_skipped_at"
+    private const val KEY_DUPLICATE_SKIPPED_SUMMARY = "duplicate_skipped_summary"
+    private const val KEY_PERSIST_FAILED_AT = "persist_failed_at"
+    private const val KEY_PERSIST_FAILED_REASON = "persist_failed_reason"
     private const val PERIODIC_WORK_NAME = "notification_listener_health"
     private const val ONE_TIME_WORK_NAME = "notification_listener_rebind"
+    const val KEY_SHOULD_REQUEST_REBIND = "should_request_rebind"
 
     fun schedule(context: Context) {
         val appContext = context.applicationContext
@@ -59,7 +85,9 @@ object NotificationListenerHealth {
 
     fun enqueueRebindCheck(context: Context) {
         val appContext = context.applicationContext
-        val request = OneTimeWorkRequestBuilder<NotificationListenerHealthWorker>().build()
+        val request = OneTimeWorkRequestBuilder<NotificationListenerHealthWorker>()
+            .setInputData(workDataOf(KEY_SHOULD_REQUEST_REBIND to true))
+            .build()
         WorkManager.getInstance(appContext).enqueueUniqueWork(
             ONE_TIME_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
@@ -85,6 +113,68 @@ object NotificationListenerHealth {
 
     fun markHealthCheck(context: Context) {
         record(context, KEY_HEALTH_CHECK_AT, "health_check")
+    }
+
+    fun markNotificationPosted(context: Context, packageName: String, summary: String) {
+        val now = System.currentTimeMillis()
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_NOTIFICATION_POSTED_AT, now)
+            .putString(KEY_NOTIFICATION_POSTED_PACKAGE, packageName)
+            .putString(KEY_NOTIFICATION_POSTED_SUMMARY, summary.limited())
+            .putString(KEY_LAST_EVENT, "notification_posted:$packageName")
+            .putLong(KEY_LAST_EVENT_AT, now)
+            .apply()
+    }
+
+    fun markNotificationSkipped(
+        context: Context,
+        packageName: String,
+        reason: String,
+        summary: String,
+    ) {
+        val now = System.currentTimeMillis()
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_NOTIFICATION_SKIPPED_AT, now)
+            .putString(KEY_NOTIFICATION_SKIPPED_REASON, "$packageName:$reason")
+            .putString(KEY_NOTIFICATION_SKIPPED_SUMMARY, summary.limited())
+            .putString(KEY_LAST_EVENT, "notification_skipped:$packageName:$reason")
+            .putLong(KEY_LAST_EVENT_AT, now)
+            .apply()
+    }
+
+    fun markRawStored(context: Context, packageName: String, rawId: Long, summary: String) {
+        val now = System.currentTimeMillis()
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_RAW_STORED_AT, now)
+            .putString(KEY_RAW_STORED_SUMMARY, "$packageName rawId=$rawId ${summary.limited()}")
+            .putString(KEY_LAST_EVENT, "raw_stored:$packageName:$rawId")
+            .putLong(KEY_LAST_EVENT_AT, now)
+            .apply()
+    }
+
+    fun markDuplicateSkipped(context: Context, packageName: String, rawId: Long, summary: String) {
+        val now = System.currentTimeMillis()
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_DUPLICATE_SKIPPED_AT, now)
+            .putString(KEY_DUPLICATE_SKIPPED_SUMMARY, "$packageName rawId=$rawId ${summary.limited()}")
+            .putString(KEY_LAST_EVENT, "duplicate_skipped:$packageName:$rawId")
+            .putLong(KEY_LAST_EVENT_AT, now)
+            .apply()
+    }
+
+    fun markPersistFailed(context: Context, packageName: String, reason: String) {
+        val now = System.currentTimeMillis()
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_PERSIST_FAILED_AT, now)
+            .putString(KEY_PERSIST_FAILED_REASON, "$packageName:$reason")
+            .putString(KEY_LAST_EVENT, "persist_failed:$packageName")
+            .putLong(KEY_LAST_EVENT_AT, now)
+            .apply()
     }
 
     fun requestRebind(context: Context, reason: String): Boolean {
@@ -125,6 +215,18 @@ object NotificationListenerHealth {
             lastRebindRequestedAt = prefs.getTime(KEY_REBIND_REQUESTED_AT),
             lastRebindSkippedAt = prefs.getTime(KEY_REBIND_SKIPPED_AT),
             lastRebindFailedAt = prefs.getTime(KEY_REBIND_FAILED_AT),
+            lastNotificationPostedAt = prefs.getTime(KEY_NOTIFICATION_POSTED_AT),
+            lastNotificationPostedPackage = prefs.getString(KEY_NOTIFICATION_POSTED_PACKAGE, null),
+            lastNotificationPostedSummary = prefs.getString(KEY_NOTIFICATION_POSTED_SUMMARY, null),
+            lastNotificationSkippedAt = prefs.getTime(KEY_NOTIFICATION_SKIPPED_AT),
+            lastNotificationSkippedReason = prefs.getString(KEY_NOTIFICATION_SKIPPED_REASON, null),
+            lastNotificationSkippedSummary = prefs.getString(KEY_NOTIFICATION_SKIPPED_SUMMARY, null),
+            lastRawStoredAt = prefs.getTime(KEY_RAW_STORED_AT),
+            lastRawStoredSummary = prefs.getString(KEY_RAW_STORED_SUMMARY, null),
+            lastDuplicateSkippedAt = prefs.getTime(KEY_DUPLICATE_SKIPPED_AT),
+            lastDuplicateSkippedSummary = prefs.getString(KEY_DUPLICATE_SKIPPED_SUMMARY, null),
+            lastPersistFailedAt = prefs.getTime(KEY_PERSIST_FAILED_AT),
+            lastPersistFailedReason = prefs.getString(KEY_PERSIST_FAILED_REASON, null),
         )
     }
 
@@ -141,5 +243,9 @@ object NotificationListenerHealth {
     private fun android.content.SharedPreferences.getTime(key: String): Long? {
         val value = getLong(key, 0L)
         return value.takeIf { it > 0L }
+    }
+
+    private fun String.limited(maxLength: Int = 500): String {
+        return if (length <= maxLength) this else take(maxLength) + "..."
     }
 }

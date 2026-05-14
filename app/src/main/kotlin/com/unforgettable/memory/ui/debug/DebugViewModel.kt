@@ -45,6 +45,11 @@ class DebugViewModel(application: Application) : AndroidViewModel(application) {
         _listenerHealth.value = NotificationListenerHealth.snapshot(app)
     }
 
+    fun requestListenerRebind() {
+        NotificationListenerHealth.enqueueRebindCheck(app)
+        refreshListenerHealth()
+    }
+
     fun injectDemoNotification() {
         seedNotifications(count = 1, insertRaw = true, postVisible = false)
     }

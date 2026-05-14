@@ -10,7 +10,9 @@ class NotificationListenerHealthWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         NotificationListenerHealth.markHealthCheck(applicationContext)
-        NotificationListenerHealth.requestRebind(applicationContext, reason = "health_check")
+        if (inputData.getBoolean(NotificationListenerHealth.KEY_SHOULD_REQUEST_REBIND, false)) {
+            NotificationListenerHealth.requestRebind(applicationContext, reason = "health_check")
+        }
         return Result.success()
     }
 }

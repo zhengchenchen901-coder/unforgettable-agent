@@ -1,5 +1,6 @@
 package com.unforgettable.memory.service
 
+import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -51,13 +52,28 @@ class MemoryNotificationListener : NotificationListenerService() {
     }
 
     private fun persistNotification(sbn: StatusBarNotification, source: String) {
+        val healthSummary = sbn.healthSummary(source)
+        NotificationListenerHealth.markNotificationPosted(this, sbn.packageName, healthSummary)
+
         if (sbn.packageName == packageName && sbn.notification.channelId == NotificationChannels.DEBUG_SEED_CHANNEL_ID) {
+            NotificationListenerHealth.markNotificationSkipped(
+                this,
+                sbn.packageName,
+                reason = "debug_seed",
+                summary = healthSummary,
+            )
             Log.d(TAG, "Skipped visible debug seed notification via $source")
             return
         }
 
         val event = parser.parse(sbn)
         if (event == null) {
+            NotificationListenerHealth.markNotificationSkipped(
+                this,
+                sbn.packageName,
+                reason = "blank_parser",
+                summary = healthSummary,
+            )
             Log.d(TAG, "Skipped blank notification from ${sbn.packageName} via $source")
             return
         }
@@ -73,6 +89,12 @@ class MemoryNotificationListener : NotificationListenerService() {
                     timestamp = event.timestamp,
                 )
                 if (existingId != null) {
+                    NotificationListenerHealth.markDuplicateSkipped(
+                        this@MemoryNotificationListener,
+                        event.packageName,
+                        existingId,
+                        "${event.title} ${event.content}",
+                    )
                     Log.d(TAG, "Skipped duplicate notification $existingId from ${event.packageName} via $source")
                     return@launch
                 }
@@ -85,6 +107,12 @@ class MemoryNotificationListener : NotificationListenerService() {
                         timestamp = event.timestamp,
                     ),
                 )
+                NotificationListenerHealth.markRawStored(
+                    this@MemoryNotificationListener,
+                    event.packageName,
+                    rawId,
+                    "${event.title} ${event.content}",
+                )
                 Log.d(TAG, "Stored notification $rawId from ${event.packageName} via $source")
 
                 val shouldExtract = SupportedApps.shouldRunAi(event.packageName) &&
@@ -93,6 +121,11 @@ class MemoryNotificationListener : NotificationListenerService() {
                     ExtractionWorker.enqueue(this@MemoryNotificationListener, rawId)
                 }
             }.onFailure { error ->
+                NotificationListenerHealth.markPersistFailed(
+                    this@MemoryNotificationListener,
+                    event.packageName,
+                    error.message ?: error::class.java.simpleName,
+                )
                 Log.w(TAG, "Failed to persist notification from ${event.packageName} via $source", error)
             }
         }
@@ -108,4 +141,24 @@ class MemoryNotificationListener : NotificationListenerService() {
     companion object {
         private const val TAG = "MemoryNotification"
     }
+}
+
+private fun StatusBarNotification.healthSummary(source: String): String {
+    val extras = notification.extras
+    val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
+    val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim().orEmpty()
+    val keys = extras?.keySet().orEmpty().sorted().joinToString(",")
+    return listOf(
+        "source=$source",
+        "channel=${notification.channelId.orEmpty()}",
+        "id=$id",
+        "tag=${tag.orEmpty()}",
+        "title=${title.limited()}",
+        "text=${text.limited()}",
+        "extras=$keys",
+    ).joinToString(" | ")
+}
+
+private fun String.limited(maxLength: Int = 80): String {
+    return if (length <= maxLength) this else take(maxLength) + "..."
 }
