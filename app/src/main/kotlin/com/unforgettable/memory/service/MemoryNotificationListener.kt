@@ -18,11 +18,31 @@ class MemoryNotificationListener : NotificationListenerService() {
     private val parser = NotificationParser()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    override fun onCreate() {
+        super.onCreate()
+        NotificationListenerHealth.markCreated(this)
+        Log.d(TAG, "Notification listener created")
+    }
+
     override fun onListenerConnected() {
         super.onListenerConnected()
-        activeNotifications.orEmpty().forEach { sbn ->
-            persistNotification(sbn, source = "active")
-        }
+        NotificationListenerHealth.markConnected(this)
+        Log.d(TAG, "Notification listener connected")
+        runCatching { activeNotifications.orEmpty() }
+            .getOrElse { error ->
+                Log.w(TAG, "Failed to read active notifications on connect", error)
+                emptyArray()
+            }
+            .forEach { sbn ->
+                persistNotification(sbn, source = "active")
+            }
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        NotificationListenerHealth.markDisconnected(this)
+        Log.w(TAG, "Notification listener disconnected; requesting rebind")
+        NotificationListenerHealth.requestRebind(this, reason = "listener_disconnected")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -37,38 +57,44 @@ class MemoryNotificationListener : NotificationListenerService() {
         }
 
         scope.launch {
-            val container = (application as UnforgettableApp).container
-            val rawNotificationDao = container.database.rawNotificationDao()
-            val existingId = rawNotificationDao.findExistingId(
-                packageName = event.packageName,
-                title = event.title,
-                content = event.content,
-                timestamp = event.timestamp,
-            )
-            if (existingId != null) {
-                Log.d(TAG, "Skipped duplicate notification $existingId from ${event.packageName} via $source")
-                return@launch
-            }
-
-            val rawId = rawNotificationDao.insert(
-                RawNotificationEntity(
+            runCatching {
+                val container = (application as UnforgettableApp).container
+                val rawNotificationDao = container.database.rawNotificationDao()
+                val existingId = rawNotificationDao.findExistingId(
                     packageName = event.packageName,
                     title = event.title,
                     content = event.content,
                     timestamp = event.timestamp,
-                ),
-            )
-            Log.d(TAG, "Stored notification $rawId from ${event.packageName} via $source")
+                )
+                if (existingId != null) {
+                    Log.d(TAG, "Skipped duplicate notification $existingId from ${event.packageName} via $source")
+                    return@launch
+                }
 
-            val shouldExtract = SupportedApps.shouldRunAi(event.packageName) &&
-                !NotificationRules.shouldIgnore(event.title, event.content)
-            if (shouldExtract) {
-                ExtractionWorker.enqueue(this@MemoryNotificationListener, rawId)
+                val rawId = rawNotificationDao.insert(
+                    RawNotificationEntity(
+                        packageName = event.packageName,
+                        title = event.title,
+                        content = event.content,
+                        timestamp = event.timestamp,
+                    ),
+                )
+                Log.d(TAG, "Stored notification $rawId from ${event.packageName} via $source")
+
+                val shouldExtract = SupportedApps.shouldRunAi(event.packageName) &&
+                    !NotificationRules.shouldIgnore(event.title, event.content)
+                if (shouldExtract) {
+                    ExtractionWorker.enqueue(this@MemoryNotificationListener, rawId)
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to persist notification from ${event.packageName} via $source", error)
             }
         }
     }
 
     override fun onDestroy() {
+        NotificationListenerHealth.markDestroyed(this)
+        Log.d(TAG, "Notification listener destroyed")
         scope.cancel()
         super.onDestroy()
     }

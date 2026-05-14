@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAlert
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -33,11 +35,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.unforgettable.memory.data.storage.entity.AiExtractionLogEntity
 import com.unforgettable.memory.data.storage.entity.RawNotificationEntity
 import com.unforgettable.memory.domain.notification.SupportedApps
+import com.unforgettable.memory.service.NotificationListenerHealthSnapshot
 import com.unforgettable.memory.ui.formatDateTime
 
 private enum class DebugTab(val label: String) {
     Raw("Raw"),
     Logs("AI Logs"),
+    Health("Health"),
 }
 
 @Composable
@@ -49,6 +53,7 @@ fun DebugScreen(modifier: Modifier = Modifier) {
     )
     val rawNotifications by viewModel.rawNotifications.collectAsStateWithLifecycle()
     val extractionLogs by viewModel.extractionLogs.collectAsStateWithLifecycle()
+    val listenerHealth by viewModel.listenerHealth.collectAsStateWithLifecycle()
     var selected by rememberSaveable { mutableStateOf(DebugTab.Raw) }
 
     Column(
@@ -91,6 +96,14 @@ fun DebugScreen(modifier: Modifier = Modifier) {
                         items(extractionLogs, key = { it.id }) { ExtractionLogCard(it) }
                     }
                 }
+                DebugTab.Health -> {
+                    item {
+                        ListenerHealthCard(
+                            health = listenerHealth,
+                            onRefresh = viewModel::refreshListenerHealth,
+                        )
+                    }
+                }
             }
         }
     }
@@ -104,6 +117,75 @@ private fun EmptyDebugCard(text: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ListenerHealthCard(
+    health: NotificationListenerHealthSnapshot,
+    onRefresh: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text("Notification Listener", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = if (health.notificationAccessEnabled) "Access enabled" else "Access disabled",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (health.notificationAccessEnabled) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.secondary
+                        },
+                    )
+                }
+                OutlinedButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Text("Refresh", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+            HealthRow("Last event", health.lastEvent.orEmpty(), health.lastEventAt)
+            HealthRow("Created", null, health.lastCreatedAt)
+            HealthRow("Connected", null, health.lastConnectedAt)
+            HealthRow("Disconnected", null, health.lastDisconnectedAt)
+            HealthRow("Destroyed", null, health.lastDestroyedAt)
+            HealthRow("Health check", null, health.lastHealthCheckAt)
+            HealthRow("Rebind requested", null, health.lastRebindRequestedAt)
+            HealthRow("Rebind skipped", null, health.lastRebindSkippedAt)
+            HealthRow("Rebind failed", null, health.lastRebindFailedAt)
+        }
+    }
+}
+
+@Composable
+private fun HealthRow(label: String, value: String?, timestamp: Long?) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = listOfNotNull(
+                value?.takeIf { it.isNotBlank() },
+                timestamp?.let { formatDateTime(it) },
+            ).joinToString(" / ").ifBlank { "-" },
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -158,4 +240,3 @@ private fun ExtractionLogCard(log: AiExtractionLogEntity) {
         }
     }
 }
-
